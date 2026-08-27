@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Open VSX publisher is `rijoj` (id `rijoj.cursor-usage-split`)
+
 ## 0.1.0
 
 - Status bar: Cursor % / Other % / on-demand $

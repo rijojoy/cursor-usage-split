@@ -17,7 +17,7 @@ Cursor → Extensions → search **Cursor Usage Split**.
 From a vsix:
 
 ```
-cursor --install-extension cursor-usage-split-0.1.0.vsix
+cursor --install-extension cursor-usage-split-0.1.1.vsix
 ```
 
 ## Settings
