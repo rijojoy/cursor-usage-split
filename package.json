@@ -1,0 +1,103 @@
+{
+  "name": "cursor-usage-split",
+  "displayName": "Cursor Usage Split",
+  "description": "Cursor usage and limits in the status bar — Auto, API models, on-demand.",
+  "version": "0.1.0",
+  "publisher": "rijojoy",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "homepage": "https://github.com/rijojoy/cursor-usage-split",
+  "bugs": {
+    "url": "https://github.com/rijojoy/cursor-usage-split/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rijojoy/cursor-usage-split.git"
+  },
+  "qna": "marketplace",
+  "galleryBanner": {
+    "color": "#1b1f23",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "keywords": [
+    "cursor",
+    "usage",
+    "limits",
+    "quota",
+    "billing",
+    "status bar",
+    "on-demand",
+    "cursor usage"
+  ],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "cursorUsageSplit.refresh",
+        "title": "Cursor Usage Split: Refresh"
+      },
+      {
+        "command": "cursorUsageSplit.openDetails",
+        "title": "Cursor Usage Split: Open details"
+      },
+      {
+        "command": "cursorUsageSplit.openDashboard",
+        "title": "Cursor Usage Split: Open dashboard"
+      },
+      {
+        "command": "cursorUsageSplit.diagnoseAuth",
+        "title": "Cursor Usage Split: Diagnose auth"
+      }
+    ],
+    "configuration": {
+      "title": "Cursor Usage Split",
+      "properties": {
+        "cursorUsageSplit.refreshIntervalMs": {
+          "type": "number",
+          "default": 10000,
+          "minimum": 10000,
+          "description": "Poll interval in ms. Minimum 10000."
+        },
+        "cursorUsageSplit.warningPercent": {
+          "type": "number",
+          "default": 60,
+          "description": "Yellow at this percent used."
+        },
+        "cursorUsageSplit.criticalPercent": {
+          "type": "number",
+          "default": 85,
+          "description": "Red at this percent used."
+        },
+        "cursorUsageSplit.showStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the status bar item."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "vitest run",
+    "postinstall": "node scripts/copy-wasm.js",
+    "package": "npx @vscode/vsce package"
+  },
+  "dependencies": {
+    "sql.js": "^1.14.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/sql.js": "^1.4.11",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.0",
+    "typescript": "^5.4.0",
+    "vitest": "^2.1.0"
+  }
+}
