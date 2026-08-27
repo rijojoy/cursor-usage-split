@@ -1,8 +1,8 @@
 {
   "name": "cursor-usage-split",
   "displayName": "Cursor Usage Split",
-  "description": "Cursor usage and limits in the status bar — Auto, API models, on-demand.",
-  "version": "0.1.2",
+  "description": "Auto vs API usage and on-demand spend in the Cursor status bar. Color-coded. Zero config.",
+  "version": "0.1.3",
   "publisher": "rijojoy",
   "license": "MIT",
   "icon": "media/icon.png",

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>README shots</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #0d1117;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    }
+    .shot { background: #0d1117; }
+
+    /* --- Status bar in a Cursor-like chrome --- */
+    #status {
+      width: 1080px;
+      background: #1b1f23;
+      color: #c9d1d9;
+    }
+    .titlebar {
+      height: 36px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 12px;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      font-size: 12px;
+      color: #8b949e;
+    }
+    .dots { display: flex; gap: 6px; }
+    .dots i { width: 10px; height: 10px; border-radius: 50%; display: block; }
+    .editor {
+      height: 92px;
+      background: #0d1117;
+      padding: 18px 22px;
+      font-family: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.55;
+      color: #c9d1d9;
+    }
+    .kw { color: #ff7b72; }
+    .fn { color: #d2a8ff; }
+    .str { color: #a5d6ff; }
+    .cmt { color: #8b949e; }
+    .statusbar {
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      background: #161b22;
+      border-top: 1px solid #30363d;
+      font-size: 12px;
+    }
+    .left, .right { display: flex; align-items: center; gap: 14px; color: #8b949e; }
+    .usage {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #3fb950;
+      font-variant-numeric: tabular-nums;
+    }
+    .usage svg { flex: none; }
+
+    /* --- Tooltip --- */
+    #tooltip {
+      width: 360px;
+      padding: 28px;
+      background: #0d1117;
+    }
+    .tip {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 14px 16px 12px;
+      color: #c9d1d9;
+      font-size: 13px;
+      line-height: 1.45;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    }
+    .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+    .muted { color: #8b949e; font-size: 12px; }
+    .track { margin: 4px 0 10px; height: 4px; background: rgba(255,255,255,0.12); border-radius: 2px; overflow: hidden; }
+    .fill { height: 4px; border-radius: 2px; }
+    .g { color: #3fb950; }
+    .y { color: #d29922; }
+    .r { color: #f85149; }
+    .foot { margin-top: 4px; color: #8b949e; font-size: 12px; }
+
+    /* --- Details panel --- */
+    #panel {
+      width: 760px;
+      background: #1b1f23;
+      color: #c9d1d9;
+      font-size: 13px;
+    }
+    main.panel {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    h1 {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      opacity: 0.7;
+      margin: 0 0 8px;
+    }
+    .plan { font-size: 20px; font-weight: 600; margin: 0; }
+    .meta { margin-top: 6px; opacity: 0.7; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 24px; }
+    .card {
+      padding: 16px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+    }
+    .label { margin: 0; font-size: 12px; opacity: 0.7; }
+    .value { margin: 8px 0 4px; font-size: 28px; font-weight: 600; letter-spacing: -0.03em; }
+    .sub { margin: 0 0 12px; font-size: 12px; opacity: 0.7; }
+    footer.panel-foot {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-top: 24px;
+      opacity: 0.85;
+    }
+    .btn {
+      font: inherit;
+      color: #fff;
+      background: #238636;
+      border: 0;
+      padding: 6px 12px;
+      border-radius: 4px;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="shot" id="status">
+    <div class="titlebar">
+      <span class="dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></span>
+      <span>app.ts — cursor-usage-split</span>
+    </div>
+    <div class="editor">
+      <div><span class="kw">const</span> used = <span class="fn">usage</span>(<span class="str">"auto"</span>); <span class="cmt">// included pool</span></div>
+      <div><span class="kw">if</span> (used &gt; 0.6) <span class="fn">warn</span>();</div>
+    </div>
+    <div class="statusbar">
+      <div class="left"><span>main*</span><span>UTF-8</span><span>TypeScript</span></div>
+      <div class="right">
+        <span class="usage">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M2.5 9.2a4.5 4.5 0 0 1 9 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            <circle cx="7" cy="9.2" r="0.9" fill="currentColor"/>
+            <line x1="7" y1="9.2" x2="7" y2="5.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Cursor 42% · Other 18% · On-d $4.20
+        </span>
+        <span>Ln 12, Col 8</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="shot" id="tooltip">
+    <div class="tip">
+      <div class="row"><strong>Cursor</strong> <span class="muted">(Auto + Composer)</span> <span class="g">42%</span></div>
+      <div class="track"><div class="fill" style="width:42%;background:#3fb950"></div></div>
+      <div class="row"><strong>Other</strong> <span class="muted">(API models)</span> <span class="g">18%</span></div>
+      <div class="track"><div class="fill" style="width:18%;background:#3fb950"></div></div>
+      <div class="row"><strong>On-demand</strong> <span class="g">$4.20</span></div>
+      <div class="muted">no spend limit</div>
+      <div class="track"><div class="fill" style="width:0%;background:#3fb950"></div></div>
+      <div class="foot">Pro · resets Sep 1</div>
+    </div>
+  </div>
+
+  <div class="shot" id="panel">
+    <main class="panel">
+      <header>
+        <h1>Usage</h1>
+        <p class="plan">Pro</p>
+        <p class="meta">Resets Sep 1</p>
+      </header>
+      <section class="grid">
+        <article class="card">
+          <p class="label">Cursor</p>
+          <p class="value" style="color:#3fb950">42%</p>
+          <p class="sub">Included spend $12.40</p>
+          <div class="track"><div class="fill" style="width:42%;background:#3fb950"></div></div>
+        </article>
+        <article class="card">
+          <p class="label">Other</p>
+          <p class="value" style="color:#3fb950">18%</p>
+          <p class="sub">API models</p>
+          <div class="track"><div class="fill" style="width:18%;background:#3fb950"></div></div>
+        </article>
+        <article class="card">
+          <p class="label">On-demand</p>
+          <p class="value" style="color:#3fb950">$4.20</p>
+          <p class="sub">no spend limit</p>
+          <div class="track"><div class="fill" style="width:0%;background:#3fb950"></div></div>
+        </article>
+      </section>
+      <footer class="panel-foot">
+        <span>Updated Aug 27, 8:40 PM</span>
+        <span class="btn">Refresh</span>
+        <span class="btn">Open dashboard</span>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3
+
+- Marketplace README with status bar, tooltip, and details screenshots
+
 ## 0.1.2
 
 - Open VSX publisher is `rijojoy` (id `rijojoy.cursor-usage-split`). The `rijoj` listing is retired.
