@@ -57,4 +57,37 @@ describe("tooltipLines", () => {
     expect(text).toContain("Other");
     expect(text).toContain("On-demand");
   });
+
+  it("uses pooled headline without a secondary team pool line", () => {
+    const snapshot = {
+      ...base,
+      budgetSource: "pooled" as const,
+      teamPoolUsedUsd: 200,
+      teamPoolLimitUsd: 400,
+    };
+    const text = tooltipLines(snapshot, 60, 85).join("\n");
+    expect(text).toContain("$200.00 / $400.00");
+    expect(text).not.toContain("Team pool");
+  });
+
+  it("shows unlimited copy with no usage cap", () => {
+    const text = tooltipLines(
+      { ...base, displayMode: "unlimited" as const, budgetUsedUsd: null, budgetLimitUsd: null, budgetPct: null, budgetLabel: null, budgetSource: null, teamPoolUsedUsd: null, teamPoolLimitUsd: null },
+      60,
+      85,
+    ).join("\n");
+    expect(text).toContain("Unlimited");
+    expect(text).toContain("no usage cap on this plan");
+  });
+
+  it("adds Cursor and Other rows when budget percents exist", () => {
+    const text = tooltipLines(
+      { ...base, cursorPct: 42, otherPct: 18 },
+      60,
+      85,
+    ).join("\n");
+    expect(text).toContain("$200.00 / $400.00");
+    expect(text).toContain("Cursor");
+    expect(text).toContain("Other");
+  });
 });

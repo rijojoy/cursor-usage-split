@@ -68,4 +68,45 @@ describe("renderPanelHtml", () => {
     expect(html).toContain("On-demand");
     expect(html).toContain("Cursor");
   });
+
+  it("uses pooled headline without a secondary team pool card", () => {
+    const snapshot: UsageSnapshot = {
+      ...budgetSnapshot,
+      budgetSource: "pooled",
+      teamPoolUsedUsd: 200,
+      teamPoolLimitUsd: 400,
+    };
+    const html = renderPanelHtml(webview, snapshot, 60, 85);
+    expect(html).toContain("$200.00 / $400.00");
+    expect(html).not.toContain("Team pool");
+  });
+
+  it("renders unlimited with an empty fill track", () => {
+    const snapshot: UsageSnapshot = {
+      ...budgetSnapshot,
+      displayMode: "unlimited",
+      budgetUsedUsd: null,
+      budgetLimitUsd: null,
+      budgetPct: null,
+      budgetLabel: null,
+      budgetSource: null,
+      teamPoolUsedUsd: null,
+      teamPoolLimitUsd: null,
+    };
+    const html = renderPanelHtml(webview, snapshot, 60, 85);
+    expect(html).toContain("Unlimited");
+    expect(html).toContain("width:0%");
+  });
+
+  it("adds Cursor and Other cards when budget percents exist", () => {
+    const snapshot: UsageSnapshot = {
+      ...budgetSnapshot,
+      cursorPct: 42,
+      otherPct: 18,
+    };
+    const html = renderPanelHtml(webview, snapshot, 60, 85);
+    expect(html).toContain("$200.00 / $400.00");
+    expect(html).toContain(">Cursor</p>");
+    expect(html).toContain(">Other</p>");
+  });
 });
