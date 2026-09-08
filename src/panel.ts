@@ -50,13 +50,11 @@ function gaugeHtml(
   </article>`;
 }
 
-export function renderPanelHtml(
-  webview: vscode.Webview,
+function splitCardsHtml(
   snapshot: UsageSnapshot,
   warningPercent: number,
   criticalPercent: number,
 ): string {
-  const n = nonce();
   const cursorBand = colorBand(snapshot.cursorPct, warningPercent, criticalPercent);
   const otherBand = colorBand(snapshot.otherPct, warningPercent, criticalPercent);
   const onDemandBand = colorBand(snapshot.onDemandPct, warningPercent, criticalPercent, {
@@ -69,6 +67,131 @@ export function renderPanelHtml(
     : snapshot.onDemandPct === null
       ? "no spend limit"
       : `${Math.round(snapshot.onDemandPct)}% of cap`;
+
+  return `<section class="grid">
+      ${gaugeHtml("Cursor", formatPercent(snapshot.cursorPct).trim(), included, snapshot.cursorPct, BAND_HEX[cursorBand])}
+      ${gaugeHtml("Other", formatPercent(snapshot.otherPct).trim(), "API models", snapshot.otherPct, BAND_HEX[otherBand])}
+      ${gaugeHtml("On-demand", formatUsd(snapshot.onDemandUsd), onDemandSub, snapshot.onDemandPct, BAND_HEX[onDemandBand])}
+    </section>`;
+}
+
+function budgetCardsHtml(
+  snapshot: UsageSnapshot,
+  warningPercent: number,
+  criticalPercent: number,
+): string {
+  const budgetBand = colorBand(snapshot.budgetPct, warningPercent, criticalPercent, {
+    noCap: snapshot.budgetPct === null,
+  });
+  const label = snapshot.budgetLabel ?? "Usage";
+  const budgetSub =
+    snapshot.budgetPct === null
+      ? "no spend limit"
+      : `${Math.round(snapshot.budgetPct)}% of cap`;
+  const primary = gaugeHtml(
+    label,
+    `${formatUsd(snapshot.budgetUsedUsd)} / ${formatUsd(snapshot.budgetLimitUsd)}`,
+    budgetSub,
+    snapshot.budgetPct,
+    BAND_HEX[budgetBand],
+  );
+
+  const optional: string[] = [];
+  if (snapshot.cursorPct !== null) {
+    const cursorBand = colorBand(snapshot.cursorPct, warningPercent, criticalPercent);
+    const included =
+      snapshot.includedUsd !== null
+        ? `Included spend $${snapshot.includedUsd.toFixed(2)}`
+        : "Included usage";
+    optional.push(
+      gaugeHtml(
+        "Cursor",
+        formatPercent(snapshot.cursorPct).trim(),
+        included,
+        snapshot.cursorPct,
+        BAND_HEX[cursorBand],
+      ),
+    );
+  }
+  if (snapshot.otherPct !== null) {
+    const otherBand = colorBand(snapshot.otherPct, warningPercent, criticalPercent);
+    optional.push(
+      gaugeHtml(
+        "Other",
+        formatPercent(snapshot.otherPct).trim(),
+        "API models",
+        snapshot.otherPct,
+        BAND_HEX[otherBand],
+      ),
+    );
+  }
+  if (snapshot.onDemandUsd !== null || snapshot.onDemandPct !== null) {
+    const onDemandBand = colorBand(snapshot.onDemandPct, warningPercent, criticalPercent, {
+      noCap: snapshot.onDemandPct === null,
+    });
+    const onDemandSub = !snapshot.onDemandEnabled
+      ? "On-demand off"
+      : snapshot.onDemandPct === null
+        ? "no spend limit"
+        : `${Math.round(snapshot.onDemandPct)}% of cap`;
+    optional.push(
+      gaugeHtml(
+        "On-demand",
+        formatUsd(snapshot.onDemandUsd),
+        onDemandSub,
+        snapshot.onDemandPct,
+        BAND_HEX[onDemandBand],
+      ),
+    );
+  }
+  if (
+    snapshot.teamPoolUsedUsd !== null &&
+    snapshot.teamPoolLimitUsd !== null &&
+    snapshot.budgetSource !== "pooled"
+  ) {
+    const poolPct =
+      snapshot.teamPoolLimitUsd > 0
+        ? (snapshot.teamPoolUsedUsd / snapshot.teamPoolLimitUsd) * 100
+        : null;
+    const poolBand = colorBand(poolPct, warningPercent, criticalPercent, {
+      noCap: poolPct === null,
+    });
+    optional.push(
+      gaugeHtml(
+        "Team pool",
+        `${formatUsd(snapshot.teamPoolUsedUsd)} / ${formatUsd(snapshot.teamPoolLimitUsd)}`,
+        poolPct === null ? "no spend limit" : `${Math.round(poolPct)}% of cap`,
+        poolPct,
+        BAND_HEX[poolBand],
+      ),
+    );
+  }
+
+  const optionalSection =
+    optional.length > 0
+      ? `<section class="grid optional">${optional.join("")}</section>`
+      : "";
+
+  return `<section class="grid primary">${primary}</section>${optionalSection}`;
+}
+
+function unlimitedCardsHtml(): string {
+  return `<section class="grid primary">${gaugeHtml("Usage", "Unlimited", "no usage cap on this plan", null, BAND_HEX.green)}</section>`;
+}
+
+export function renderPanelHtml(
+  webview: vscode.Webview,
+  snapshot: UsageSnapshot,
+  warningPercent: number,
+  criticalPercent: number,
+): string {
+  const n = nonce();
+  const cards =
+    snapshot.displayMode === "unlimited"
+      ? unlimitedCardsHtml()
+      : snapshot.displayMode === "budget"
+        ? budgetCardsHtml(snapshot, warningPercent, criticalPercent)
+        : splitCardsHtml(snapshot, warningPercent, criticalPercent);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -93,6 +216,8 @@ export function renderPanelHtml(
     .plan { font-size: 20px; font-weight: 600; margin: 0; }
     .meta { margin-top: 6px; opacity: 0.7; }
     .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .grid.primary { grid-template-columns: 1fr; margin-bottom: 16px; }
+    .grid.optional { margin-top: 0; }
     .card { padding: 16px; border: 1px solid var(--vscode-widget-border, rgba(255,255,255,0.08)); border-radius: 8px; }
     .label { margin: 0; font-size: 12px; opacity: 0.7; }
     .value { margin: 8px 0 4px; font-size: 28px; font-weight: 600; letter-spacing: -0.03em; }
@@ -115,11 +240,7 @@ export function renderPanelHtml(
       <p class="plan">${snapshot.planName ?? "Current plan"}</p>
       <p class="meta">Resets ${formatReset(snapshot.cycleEnd)}${snapshot.stale ? " · retrying" : ""}</p>
     </header>
-    <section class="grid">
-      ${gaugeHtml("Cursor", formatPercent(snapshot.cursorPct).trim(), included, snapshot.cursorPct, BAND_HEX[cursorBand])}
-      ${gaugeHtml("Other", formatPercent(snapshot.otherPct).trim(), "API models", snapshot.otherPct, BAND_HEX[otherBand])}
-      ${gaugeHtml("On-demand", formatUsd(snapshot.onDemandUsd), onDemandSub, snapshot.onDemandPct, BAND_HEX[onDemandBand])}
-    </section>
+    ${cards}
     <footer>
       <span>Updated ${formatWhen(snapshot.fetchedAt)}</span>
       <button id="refresh">Refresh</button>
