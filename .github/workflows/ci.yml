@@ -42,8 +42,13 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: "*.vsix"
+          generate_release_notes: true
       - name: Publish Open VSX
-        if: env.OVSX_PAT != ''
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
-      - run: npx ovsx publish cursor-usage-split-*.vsix -p "$OVSX_PAT"
+        run: |
+          if [ -z "$OVSX_PAT" ]; then
+            echo "OVSX_PAT secret missing; skip Open VSX publish"
+            exit 0
+          fi
+          npx ovsx publish cursor-usage-split-*.vsix -p "$OVSX_PAT"
