@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2
+
+- Enterprise: if the dashboard RPC returns 401, still load `cursor.com/api/usage-summary` (the endpoint that actually has dollar caps)
+- Session cookie tries the full JWT `sub` and the tail after `|`, plus `cursorAuth/cachedUserId`
+- Also reads `~/.cursor/auth.json` / `~/.config/cursor/auth.json`
+
 ## 0.2.1
 
 - Sign-in copy: a browser login on cursor.com is not enough; use Cursor Settings → Account

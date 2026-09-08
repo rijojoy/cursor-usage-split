@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   buildWorkosCookie,
+  cookieUserIdsFromJwt,
   decodeSqliteText,
   getStateDbCandidates,
   getStateDbPath,
+  parseAuthJson,
   parseStoredAccessToken,
   readAccessTokenFromBytes,
+  readAuthBundleFromBytes,
   stateDbPathFromExtensionStorage,
   uniqueDbPaths,
   userIdFromJwt,
@@ -111,6 +114,24 @@ describe("userIdFromJwt", () => {
   });
 });
 
+describe("cookieUserIdsFromJwt", () => {
+  it("tries the full sub first, then the tail after the last pipe", () => {
+    const payload = Buffer.from(
+      JSON.stringify({ sub: "google-oauth2|user_abc" }),
+    ).toString("base64url");
+    expect(cookieUserIdsFromJwt(`hdr.${payload}.sig`)).toEqual([
+      "google-oauth2|user_abc",
+      "user_abc",
+    ]);
+  });
+});
+
+describe("parseAuthJson", () => {
+  it("reads accessToken from cursor-agent auth.json", () => {
+    expect(parseAuthJson('{"accessToken":"abc.def.ghi"}')).toBe("abc.def.ghi");
+  });
+});
+
 describe("readAccessTokenFromBytes", () => {
   it("reads cursorAuth/token when accessToken is missing", async () => {
     const initSqlJs = (await import("sql.js")).default;
@@ -121,6 +142,21 @@ describe("readAccessTokenFromBytes", () => {
     const bytes = db.export();
     db.close();
     expect(await readAccessTokenFromBytes(bytes)).toBe("abc.def.ghi");
+  });
+
+  it("reads cachedUserId alongside the token", async () => {
+    const initSqlJs = (await import("sql.js")).default;
+    const SQL = await initSqlJs();
+    const db = new SQL.Database();
+    db.run("CREATE TABLE ItemTable (key TEXT, value TEXT)");
+    db.run("INSERT INTO ItemTable VALUES (?, ?)", ["cursorAuth/accessToken", "abc.def.ghi"]);
+    db.run("INSERT INTO ItemTable VALUES (?, ?)", ["cursorAuth/cachedUserId", "user_abc"]);
+    const bytes = db.export();
+    db.close();
+    const bundle = await readAuthBundleFromBytes(bytes);
+    expect(bundle.token).toBe("abc.def.ghi");
+    expect(bundle.cachedUserId).toBe("user_abc");
+    expect(bundle.keys).toEqual(expect.arrayContaining(["cursorAuth/accessToken", "cursorAuth/cachedUserId"]));
   });
 });
 

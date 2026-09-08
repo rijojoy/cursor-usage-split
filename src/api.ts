@@ -1,4 +1,4 @@
-import { buildWorkosCookie, userIdFromJwt } from "./auth";
+import { buildWorkosCookie, cookieUserIdsFromJwt } from "./auth";
 import { mapUsage, needsUsageSummaryFallback, type UsageSnapshot } from "./usage";
 
 const API_ORIGIN = "https://api2.cursor.sh";
@@ -74,8 +74,8 @@ export async function fetchUsagePayloads(token: string): Promise<UsagePayloads> 
   return { period, hardLimit, planInfo };
 }
 
-export function usageSummaryRequestInit(token: string, useCookie: boolean): RequestInit {
-  if (!useCookie) {
+export function usageSummaryRequestInit(token: string, userId?: string): RequestInit {
+  if (!userId) {
     return {
       method: "GET",
       headers: {
@@ -83,10 +83,6 @@ export function usageSummaryRequestInit(token: string, useCookie: boolean): Requ
         Accept: "application/json",
       },
     };
-  }
-  const userId = userIdFromJwt(token);
-  if (!userId) {
-    throw new AuthError("Cannot build Cursor session cookie");
   }
   return {
     method: "GET",
@@ -105,12 +101,13 @@ export async function tryUsageSummary(
   period: unknown,
   hardLimit: unknown,
   planInfo: unknown,
+  userIds: string[] = cookieUserIdsFromJwt(token),
 ): Promise<{ snapshot: UsageSnapshot; failed: boolean }> {
   if (!needsUsageSummaryFallback(snapshot)) {
     return { snapshot, failed: false };
   }
   try {
-    const summary = await fetchUsageSummary(token);
+    const summary = await fetchUsageSummary(token, userIds);
     return {
       snapshot: mapUsage(period, hardLimit, planInfo, fetchedAt, false, summary),
       failed: false,
@@ -120,20 +117,21 @@ export async function tryUsageSummary(
   }
 }
 
-export async function fetchUsageSummary(token: string): Promise<unknown> {
+export async function fetchUsageSummary(
+  token: string,
+  userIds: string[] = cookieUserIdsFromJwt(token),
+): Promise<unknown> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);
+  const attempts: (string | undefined)[] = [undefined, ...userIds];
   try {
-    for (const useCookie of [false, true]) {
+    for (const userId of attempts) {
       const response = await fetch(`${WEB_ORIGIN}/api/usage-summary`, {
-        ...usageSummaryRequestInit(token, useCookie),
+        ...usageSummaryRequestInit(token, userId),
         signal: controller.signal,
       });
       if (response.status === 401 || response.status === 403) {
-        if (!useCookie) {
-          continue;
-        }
-        throw new AuthError();
+        continue;
       }
       if (response.status === 429) {
         throw new RateLimitError();
@@ -152,4 +150,62 @@ export async function fetchUsageSummary(token: string): Promise<unknown> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+export function snapshotHasMeter(
+  snapshot: Pick<
+    UsageSnapshot,
+    "displayMode" | "cursorPct" | "otherPct" | "budgetUsedUsd" | "budgetLimitUsd"
+  >,
+): boolean {
+  return (
+    snapshot.displayMode === "unlimited" ||
+    snapshot.displayMode === "budget" ||
+    snapshot.cursorPct !== null ||
+    snapshot.otherPct !== null ||
+    snapshot.budgetUsedUsd !== null ||
+    snapshot.budgetLimitUsd !== null
+  );
+}
+
+export async function loadUsageSnapshot(
+  token: string,
+  fetchedAt: number,
+  userIds: string[] = cookieUserIdsFromJwt(token),
+): Promise<{
+  snapshot: UsageSnapshot;
+  summaryFailed: boolean;
+  connectAuthFailed: boolean;
+}> {
+  let period: unknown = null;
+  let hardLimit: unknown = null;
+  let planInfo: unknown = null;
+  let connectAuthFailed = false;
+  try {
+    const payloads = await fetchUsagePayloads(token);
+    period = payloads.period;
+    hardLimit = payloads.hardLimit;
+    planInfo = payloads.planInfo;
+  } catch (error) {
+    if (error instanceof AuthError) {
+      connectAuthFailed = true;
+    } else {
+      throw error;
+    }
+  }
+  const snapshot = mapUsage(period, hardLimit, planInfo, fetchedAt, false);
+  const summaryResult = await tryUsageSummary(
+    token,
+    snapshot,
+    fetchedAt,
+    period,
+    hardLimit,
+    planInfo,
+    userIds,
+  );
+  return {
+    snapshot: summaryResult.snapshot,
+    summaryFailed: summaryResult.failed,
+    connectAuthFailed,
+  };
 }

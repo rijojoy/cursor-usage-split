@@ -64,7 +64,7 @@ Click it (or **Cursor Usage Split: Open details**) for the panel:
 
 ## How it works
 
-Reads `cursorAuth/accessToken` from Cursor’s local `state.vscdb` (sql.js). Polls `GetCurrentPeriodUsage` on `api2.cursor.sh` first; if that payload has no usable meter (common on Enterprise / Teams dollar caps), it calls `cursor.com/api/usage-summary` with the same token. Nothing is uploaded to a third-party server. No cookie paste.
+Reads `cursorAuth/accessToken` from Cursor’s local `state.vscdb` (sql.js), or from `cursor-agent`’s `auth.json`. Polls `GetCurrentPeriodUsage` on `api2.cursor.sh` first. Personal Pro/Ultra usually stop there. Enterprise / Teams dollar caps often 401 or return an empty RPC body; then the same login hits `cursor.com/api/usage-summary` (WorkOS cookie). Nothing is uploaded to a third-party server. No cookie paste.
 
 ## License
 

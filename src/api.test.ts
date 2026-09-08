@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { tryUsageSummary, usageSummaryRequestInit } from "./api";
+import { loadUsageSnapshot, tryUsageSummary, usageSummaryRequestInit } from "./api";
 import type { UsageSnapshot } from "./usage";
 
 const fetchedAt = 1_700_000_000_000;
@@ -32,7 +32,7 @@ function emptySplitSnapshot(overrides: Partial<UsageSnapshot> = {}): UsageSnapsh
 
 describe("usageSummaryRequestInit", () => {
   it("sends Bearer on the first attempt", () => {
-    const init = usageSummaryRequestInit("abc.def.ghi", false);
+    const init = usageSummaryRequestInit("abc.def.ghi");
     expect(init.headers).toMatchObject({
       Authorization: "Bearer abc.def.ghi",
     });
@@ -43,7 +43,7 @@ describe("usageSummaryRequestInit", () => {
       "base64url",
     );
     const token = `hdr.${payload}.sig`;
-    const init = usageSummaryRequestInit(token, true);
+    const init = usageSummaryRequestInit(token, "user_abc");
     const headers = init.headers as Record<string, string>;
     expect(headers.Cookie).toContain("WorkosCursorSessionToken=");
     expect(headers.Origin).toBe("https://cursor.com");
@@ -119,5 +119,64 @@ describe("tryUsageSummary", () => {
     expect(result.snapshot.budgetUsedUsd).toBe(200);
     expect(result.snapshot.budgetLimitUsd).toBe(400);
     expect(result.snapshot.budgetPct).toBe(50);
+  });
+
+  it("retries usage-summary with each cookie user id after Bearer 401", async () => {
+    const summary = {
+      membershipType: "enterprise",
+      individualUsage: {
+        overall: { used: 20000, limit: 40000 },
+      },
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 401, ok: false })
+      .mockResolvedValueOnce({ status: 401, ok: false })
+      .mockResolvedValueOnce({
+        status: 200,
+        ok: true,
+        json: async () => summary,
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    const snapshot = emptySplitSnapshot();
+    const result = await tryUsageSummary(
+      "token",
+      snapshot,
+      fetchedAt,
+      {},
+      {},
+      {},
+      ["google-oauth2|user_abc", "user_abc"],
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(result.failed).toBe(false);
+    expect(result.snapshot.displayMode).toBe("budget");
+  });
+});
+
+describe("loadUsageSnapshot", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("still loads enterprise usage when Connect RPC returns 401", async () => {
+    const summary = {
+      membershipType: "enterprise",
+      individualUsage: {
+        overall: { used: 20000, limit: 40000 },
+      },
+    };
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+      if (String(url).includes("api2.cursor.sh")) {
+        return { status: 401, ok: false };
+      }
+      return { status: 200, ok: true, json: async () => summary };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await loadUsageSnapshot("tok", fetchedAt, ["user_abc"]);
+    expect(result.connectAuthFailed).toBe(true);
+    expect(result.summaryFailed).toBe(false);
+    expect(result.snapshot.displayMode).toBe("budget");
+    expect(result.snapshot.budgetUsedUsd).toBe(200);
   });
 });

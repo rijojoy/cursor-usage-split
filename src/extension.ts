@@ -2,18 +2,18 @@ import * as path from "path";
 import * as vscode from "vscode";
 import {
   AuthError,
-  fetchUsagePayloads,
+  loadUsageSnapshot,
   NetworkError,
   RateLimitError,
-  tryUsageSummary,
+  snapshotHasMeter,
 } from "./api";
-import { getAccessToken, probeAuth, stateDbPathFromExtensionStorage } from "./auth";
+import { getSession, probeAuth, stateDbPathFromExtensionStorage } from "./auth";
 import { BAND_HEX, statusBarBand } from "./colors";
 import { formatStatusBar } from "./format";
 import { getLog, logError, logInfo } from "./log";
 import { DASHBOARD_URL, openDetailsPanel, refreshOpenPanel } from "./panel";
 import { buildTooltip } from "./tooltip";
-import { mapUsage, needsUsageSummaryFallback, type UsageSnapshot } from "./usage";
+import { needsUsageSummaryFallback, type UsageSnapshot } from "./usage";
 
 let statusBar: vscode.StatusBarItem | undefined;
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -85,50 +85,40 @@ async function tick(force = false): Promise<void> {
   }
   inFlight = true;
   try {
-    const token = await getAccessToken(wasmPath, extraDbPath);
-    if (!token) {
+    const session = await getSession(wasmPath, extraDbPath);
+    if (!session) {
       applyBar("sign-in");
       intervalMs = configuredInterval();
       return;
     }
 
-    const payloads = await fetchUsagePayloads(token);
     const fetchedAt = Date.now();
-    let snapshot = mapUsage(
-      payloads.period,
-      payloads.hardLimit,
-      payloads.planInfo,
+    const { snapshot, summaryFailed, connectAuthFailed } = await loadUsageSnapshot(
+      session.token,
       fetchedAt,
-      false,
+      session.userIds,
     );
-    const needsFallback = needsUsageSummaryFallback(snapshot);
-    const summaryResult = await tryUsageSummary(
-      token,
-      snapshot,
-      fetchedAt,
-      payloads.period,
-      payloads.hardLimit,
-      payloads.planInfo,
-    );
-    snapshot = summaryResult.snapshot;
-    if (summaryResult.failed) {
-      snapshot = { ...snapshot, stale: true };
+    if (connectAuthFailed && summaryFailed && !snapshotHasMeter(snapshot)) {
+      applyBar("auth");
+      logError("auth failed");
+      intervalMs = configuredInterval();
+      return;
+    }
+    if (summaryFailed && needsUsageSummaryFallback(snapshot)) {
+      const stale = { ...snapshot, stale: true };
+      lastSnapshot = stale;
+      applyBar("ok", stale);
       intervalMs = Math.min(60_000, intervalMs * 2);
       logError("usage-summary failed");
     } else {
-      if (needsFallback) {
-        logInfo(
-          `usage-summary fallback displayMode=${snapshot.displayMode} source=${snapshot.budgetSource ?? "none"}`,
-        );
-      }
+      lastSnapshot = snapshot;
+      applyBar("ok", snapshot);
       intervalMs = configuredInterval();
     }
-    lastSnapshot = snapshot;
-    applyBar("ok", snapshot);
     const t = thresholds();
-    refreshOpenPanel(snapshot, t.warningPercent, t.criticalPercent);
+    refreshOpenPanel(lastSnapshot, t.warningPercent, t.criticalPercent);
     logInfo(
-      `usage refreshed displayMode=${snapshot.displayMode} source=${snapshot.budgetSource ?? "none"}`,
+      `usage refreshed displayMode=${lastSnapshot.displayMode} source=${lastSnapshot.budgetSource ?? "none"} connectAuth=${connectAuthFailed ? "no" : "ok"}`,
     );
   } catch (error) {
     if (error instanceof AuthError) {
@@ -179,17 +169,19 @@ export function activate(context: vscode.ExtensionContext): void {
       void vscode.env.openExternal(vscode.Uri.parse(DASHBOARD_URL));
     }),
     vscode.commands.registerCommand("cursorUsageSplit.diagnoseAuth", async () => {
-      const { token, probes } = await probeAuth(wasmPath, extraDbPath);
-      const used = probes.find((p) => p.token)?.path;
-      logInfo(`diagnose token=${token ? "yes" : "no"} extraDbPath=${extraDbPath ?? ""}`);
+      const { session, probes, sqliteKeys } = await probeAuth(wasmPath, extraDbPath);
+      logInfo(`diagnose session=${session ? "yes" : "no"} source=${session?.source ?? ""} cookieIds=${session?.userIds.length ?? 0}`);
+      if (sqliteKeys.length) {
+        logInfo(`diagnose sqliteKeys=${sqliteKeys.join(",")}`);
+      }
       for (const probe of probes) {
         logInfo(
-          `diagnose path=${probe.path} exists=${probe.exists ? "yes" : "no"} token=${probe.token ? "yes" : "no"}`,
+          `diagnose kind=${probe.kind} path=${probe.path} exists=${probe.exists ? "yes" : "no"} token=${probe.token ? "yes" : "no"}`,
         );
       }
-      if (token) {
+      if (session) {
         void vscode.window.showInformationMessage(
-          `Access token found${used ? ` at ${used}` : ""}. If the bar still says Auth, reload the window.`,
+          `Access token found (${session.userIds.length} session id candidate${session.userIds.length === 1 ? "" : "s"}). If the bar still says Auth, reload the window.`,
         );
         return;
       }
