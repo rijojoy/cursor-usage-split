@@ -31,6 +31,11 @@ Open VSX: [rijojoy.cursor-usage-split](https://open-vsx.org/extension/rijojoy/cu
 
 **Cursor** is Auto + Composer (included pool). **Other** is API models. **On-demand** is dollars in the bar; percent of cap only in the tooltip if a limit exists.
 
+```
+Personal (Pro / Ultra):   Cursor 42% · Other 18% · On-d $4.20
+Enterprise / dollar cap:  $200.00 / $400.00
+```
+
 Hover the status item for the breakdown:
 
 ![Hover tooltip with Cursor, Other, and on-demand gauges](media/tooltip.png)
@@ -59,7 +64,7 @@ Click it (or **Cursor Usage Split: Open details**) for the panel:
 
 ## How it works
 
-Reads `cursorAuth/accessToken` from Cursor’s local `state.vscdb` (sql.js). Sends that Bearer token to Cursor’s dashboard API. Nothing is uploaded to a third-party server. No cookie paste.
+Reads `cursorAuth/accessToken` from Cursor’s local `state.vscdb` (sql.js). Polls `GetCurrentPeriodUsage` on `api2.cursor.sh` first; if that payload has no usable meter (common on Enterprise / Teams dollar caps), it calls `cursor.com/api/usage-summary` with the same token. Nothing is uploaded to a third-party server. No cookie paste.
 
 ## License
 

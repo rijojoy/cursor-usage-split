@@ -1,14 +1,20 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
-import { AuthError, fetchUsagePayloads, NetworkError, RateLimitError } from "./api";
+import {
+  AuthError,
+  fetchUsagePayloads,
+  fetchUsageSummary,
+  NetworkError,
+  RateLimitError,
+} from "./api";
 import { getAccessToken, getStateDbPath } from "./auth";
 import { BAND_HEX, statusBarBand } from "./colors";
 import { formatStatusBar } from "./format";
 import { logError, logInfo } from "./log";
 import { DASHBOARD_URL, openDetailsPanel, refreshOpenPanel } from "./panel";
 import { buildTooltip } from "./tooltip";
-import { mapUsage, type UsageSnapshot } from "./usage";
+import { mapUsage, needsUsageSummaryFallback, type UsageSnapshot } from "./usage";
 
 let statusBar: vscode.StatusBarItem | undefined;
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -86,19 +92,44 @@ async function tick(force = false): Promise<void> {
     }
 
     const payloads = await fetchUsagePayloads(token);
-    const snapshot = mapUsage(
+    let snapshot = mapUsage(
       payloads.period,
       payloads.hardLimit,
       payloads.planInfo,
       Date.now(),
       false,
     );
+    if (needsUsageSummaryFallback(snapshot)) {
+      try {
+        const summary = await fetchUsageSummary(token);
+        snapshot = mapUsage(
+          payloads.period,
+          payloads.hardLimit,
+          payloads.planInfo,
+          Date.now(),
+          false,
+          summary,
+        );
+        logInfo(
+          `usage-summary fallback displayMode=${snapshot.displayMode} source=${snapshot.budgetSource ?? "none"}`,
+        );
+      } catch (error) {
+        if (error instanceof AuthError) {
+          throw error;
+        }
+        logError(
+          error instanceof Error ? `usage-summary: ${error.message}` : "usage-summary failed",
+        );
+      }
+    }
     lastSnapshot = snapshot;
     applyBar("ok", snapshot);
     const t = thresholds();
     refreshOpenPanel(snapshot, t.warningPercent, t.criticalPercent);
     intervalMs = configuredInterval();
-    logInfo("usage refreshed");
+    logInfo(
+      `usage refreshed displayMode=${snapshot.displayMode} source=${snapshot.budgetSource ?? "none"}`,
+    );
   } catch (error) {
     if (error instanceof AuthError) {
       applyBar("auth");

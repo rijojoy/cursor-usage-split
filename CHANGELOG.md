@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+- Enterprise and Teams dollar caps in the status bar (`$used / $limit`)
+- Personal Auto / API split unchanged
+- Falls back to Cursor usage-summary when the dashboard RPC has no split percents
+
 ## 0.1.3
 
 - Marketplace README with status bar, tooltip, and details screenshots
