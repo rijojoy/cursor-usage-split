@@ -25,6 +25,28 @@ export function parseStoredAccessToken(raw: string): string | null {
   return value || null;
 }
 
+export function userIdFromJwt(token: string): string | null {
+  const parts = token.split(".");
+  if (parts.length < 2) {
+    return null;
+  }
+  try {
+    const json = Buffer.from(parts[1], "base64url").toString("utf8");
+    const payload = JSON.parse(json) as { sub?: unknown };
+    if (typeof payload.sub !== "string" || payload.sub.length === 0) {
+      return null;
+    }
+    const pipe = payload.sub.lastIndexOf("|");
+    return pipe >= 0 ? payload.sub.slice(pipe + 1) : payload.sub;
+  } catch {
+    return null;
+  }
+}
+
+export function buildWorkosCookie(userId: string, token: string): string {
+  return `WorkosCursorSessionToken=${encodeURIComponent(`${userId}::${token}`)}`;
+}
+
 let sqlJsPromise: Promise<unknown> | null = null;
 
 export async function readAccessTokenFromBytes(
