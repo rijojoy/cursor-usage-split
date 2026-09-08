@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- Sign-in copy: a browser login on cursor.com is not enough; use Cursor Settings → Account
+- Read `state.vscdb` from this Cursor window’s data folder (office / redirected AppData)
+- Also check Insiders / `%LOCALAPPDATA%` paths and `cursorAuth/token`
+
 ## 0.2.0
 
 - Enterprise and Teams dollar caps in the status bar (`$used / $limit`)

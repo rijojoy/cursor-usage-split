@@ -1,4 +1,3 @@
-import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import {
@@ -8,10 +7,10 @@ import {
   RateLimitError,
   tryUsageSummary,
 } from "./api";
-import { getAccessToken, getStateDbPath } from "./auth";
+import { getAccessToken, probeAuth, stateDbPathFromExtensionStorage } from "./auth";
 import { BAND_HEX, statusBarBand } from "./colors";
 import { formatStatusBar } from "./format";
-import { logError, logInfo } from "./log";
+import { getLog, logError, logInfo } from "./log";
 import { DASHBOARD_URL, openDetailsPanel, refreshOpenPanel } from "./panel";
 import { buildTooltip } from "./tooltip";
 import { mapUsage, needsUsageSummaryFallback, type UsageSnapshot } from "./usage";
@@ -22,6 +21,7 @@ let inFlight = false;
 let lastSnapshot: UsageSnapshot | undefined;
 let intervalMs = 10_000;
 let wasmPath: string | undefined;
+let extraDbPath: string | undefined;
 
 function cfg() {
   return vscode.workspace.getConfiguration("cursorUsageSplit");
@@ -58,7 +58,8 @@ function applyBar(kind: "ok" | "loading" | "sign-in" | "auth", snapshot?: UsageS
     statusBar.tooltip = buildTooltip(snapshot, t.warningPercent, t.criticalPercent);
   } else if (kind === "sign-in") {
     statusBar.color = undefined;
-    statusBar.tooltip = "Sign in to Cursor, then reload the window.";
+    statusBar.tooltip =
+      "Sign in via Cursor Settings → Account (a browser login on cursor.com is not enough), then reload the window.";
   } else if (kind === "auth") {
     statusBar.color = undefined;
     statusBar.tooltip = "Token stale — sign in to Cursor again, then reload the window.";
@@ -84,7 +85,7 @@ async function tick(force = false): Promise<void> {
   }
   inFlight = true;
   try {
-    const token = await getAccessToken(wasmPath);
+    const token = await getAccessToken(wasmPath, extraDbPath);
     if (!token) {
       applyBar("sign-in");
       intervalMs = configuredInterval();
@@ -152,6 +153,7 @@ async function tick(force = false): Promise<void> {
 
 export function activate(context: vscode.ExtensionContext): void {
   wasmPath = path.join(context.extensionPath, "media", "sql-wasm.wasm");
+  extraDbPath = stateDbPathFromExtensionStorage(context.globalStorageUri.fsPath);
   intervalMs = configuredInterval();
 
   statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 80);
@@ -177,17 +179,24 @@ export function activate(context: vscode.ExtensionContext): void {
       void vscode.env.openExternal(vscode.Uri.parse(DASHBOARD_URL));
     }),
     vscode.commands.registerCommand("cursorUsageSplit.diagnoseAuth", async () => {
-      const dbPath = getStateDbPath();
-      const exists = fs.existsSync(dbPath);
-      const token = await getAccessToken(wasmPath);
-      const lines = [
-        `Database: ${dbPath}`,
-        `Exists: ${exists ? "yes" : "no"}`,
-        `Access token: ${token ? "found" : "missing"}`,
-        token ? "Sign-in looks OK. If the bar still says Auth, reload the window." : "Sign in to Cursor, then reload the window.",
-      ];
-      void vscode.window.showInformationMessage(lines.join(" · "));
-      logInfo(`diagnose exists=${exists} token=${token ? "yes" : "no"}`);
+      const { token, probes } = await probeAuth(wasmPath, extraDbPath);
+      const used = probes.find((p) => p.token)?.path;
+      logInfo(`diagnose token=${token ? "yes" : "no"} extraDbPath=${extraDbPath ?? ""}`);
+      for (const probe of probes) {
+        logInfo(
+          `diagnose path=${probe.path} exists=${probe.exists ? "yes" : "no"} token=${probe.token ? "yes" : "no"}`,
+        );
+      }
+      if (token) {
+        void vscode.window.showInformationMessage(
+          `Access token found${used ? ` at ${used}` : ""}. If the bar still says Auth, reload the window.`,
+        );
+        return;
+      }
+      getLog().show(true);
+      void vscode.window.showInformationMessage(
+        "No Cursor app token. Sign in via Cursor Settings → Account (not the browser), then Developer: Reload Window. See Cursor Usage Split output for paths checked.",
+      );
     }),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("cursorUsageSplit")) {

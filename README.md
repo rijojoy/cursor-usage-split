@@ -51,7 +51,7 @@ Click it (or **Cursor Usage Split: Open details**) for the panel:
 | Cursor Usage Split: Refresh | Fetch usage now |
 | Cursor Usage Split: Open details | Usage panel |
 | Cursor Usage Split: Open dashboard | cursor.com/dashboard/usage |
-| Cursor Usage Split: Diagnose auth | If the bar says Sign in / Auth |
+| Cursor Usage Split: Diagnose auth | If the bar says Sign in / Auth. A browser login on cursor.com is not enough — sign in via Cursor Settings → Account, then reload. |
 
 ## Settings
 

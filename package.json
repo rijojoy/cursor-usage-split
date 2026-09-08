@@ -2,7 +2,7 @@
   "name": "cursor-usage-split",
   "displayName": "Cursor Usage Split",
   "description": "Auto vs API usage, or enterprise dollar caps, in the Cursor status bar.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "rijojoy",
   "license": "MIT",
   "icon": "media/icon.png",

@@ -5,6 +5,15 @@ import type { UsageSnapshot } from "./usage";
 
 export const DASHBOARD_URL = "https://cursor.com/dashboard/usage";
 
+export function renderSignedOutHtml(): string {
+  return `<html><body style="font-family:var(--vscode-font-family);padding:24px;line-height:1.5;max-width:36rem;">
+  <h1 style="font-size:16px;font-weight:600;">Usage</h1>
+  <p>Sign in to the <strong>Cursor app</strong>, then run <strong>Developer: Reload Window</strong>.</p>
+  <p style="opacity:.85">A login in Chrome or Edge on cursor.com does not write the token this extension reads. Open <strong>Cursor Settings → Account</strong> and confirm your work email is signed in there.</p>
+  <p style="opacity:.85">Still stuck? Command Palette → <strong>Cursor Usage Split: Diagnose auth</strong> (details also go to the Cursor Usage Split output channel).</p>
+</body></html>`;
+}
+
 function nonce(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   let value = "";
@@ -296,7 +305,7 @@ export function openDetailsPanel(
   if (snap) {
     currentPanel.webview.html = renderPanelHtml(currentPanel.webview, snap, t.warningPercent, t.criticalPercent);
   } else {
-    currentPanel.webview.html = `<html><body style="font-family:var(--vscode-font-family);padding:24px;">Sign in to Cursor to see usage.</body></html>`;
+    currentPanel.webview.html = renderSignedOutHtml();
   }
 }
 

@@ -5,7 +5,7 @@ vi.mock("vscode", () => ({
   window: { createWebviewPanel: vi.fn() },
 }));
 
-import { renderPanelHtml } from "./panel";
+import { renderPanelHtml, renderSignedOutHtml } from "./panel";
 import type { UsageSnapshot } from "./usage";
 
 const webview = { cspSource: "csp" } as import("vscode").Webview;
@@ -55,6 +55,15 @@ const proSnapshot: UsageSnapshot = {
   fetchedAt: 1,
   stale: false,
 };
+
+describe("renderSignedOutHtml", () => {
+  it("tells the user a browser login is not enough", () => {
+    const html = renderSignedOutHtml();
+    expect(html).toContain("Cursor Settings → Account");
+    expect(html).toContain("cursor.com does not write the token");
+    expect(html).toContain("Diagnose auth");
+  });
+});
 
 describe("renderPanelHtml", () => {
   it("renders the dollar pair as the primary card in budget mode", () => {
