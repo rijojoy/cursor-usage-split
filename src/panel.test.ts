@@ -109,4 +109,15 @@ describe("renderPanelHtml", () => {
     expect(html).toContain(">Cursor</p>");
     expect(html).toContain(">Other</p>");
   });
+
+  it("title-cases membershipType in the header when planName is missing", () => {
+    const snapshot: UsageSnapshot = {
+      ...budgetSnapshot,
+      planName: null,
+      membershipType: "enterprise",
+    };
+    const html = renderPanelHtml(webview, snapshot, 60, 85);
+    expect(html).toContain('<p class="plan">Enterprise</p>');
+    expect(html).not.toContain("Current plan");
+  });
 });

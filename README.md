@@ -11,7 +11,7 @@ Auto vs API usage, and on-demand spend, in the Cursor status bar. Color-coded. Z
 Cursor 42% · Other 18% · On-d $4.20
 ```
 
-Green under 60%, yellow at 60%, red at 85% — worst of the three quotas. Polls every 10 seconds using the Cursor login already on disk. The only network calls go to `api2.cursor.sh`.
+Green under 60%, yellow at 60%, red at 85% — worst of the three quotas. Polls every 10 seconds using the Cursor login already on disk. Network calls go to `api2.cursor.sh`; if that payload has no usable meter, a gated fallback hits `cursor.com/api/usage-summary` (same login, no third-party server).
 
 Unofficial. Not affiliated with Cursor. If they change that API, this breaks.
 

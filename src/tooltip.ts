@@ -1,6 +1,6 @@
 import type * as vscode from "vscode";
 import { BAND_HEX, colorBand } from "./colors";
-import { formatPercent, formatUsd } from "./format";
+import { formatPercent, formatUsd, planDisplayLabel } from "./format";
 import type { UsageSnapshot } from "./usage";
 
 function bar(pct: number | null, hex: string): string {
@@ -50,7 +50,7 @@ function splitTooltipLines(
   );
   lines.push(`<span style="opacity:0.7;">${onDemandSub}</span>`);
   lines.push(bar(snapshot.onDemandPct, BAND_HEX[onDemandBand]));
-  lines.push(`\n${snapshot.planName ?? "Plan"} · resets ${formatReset(snapshot.cycleEnd)}`);
+  lines.push(`\n${planDisplayLabel(snapshot)} · resets ${formatReset(snapshot.cycleEnd)}`);
   if (snapshot.stale) {
     lines.push(`\n\nLast updated · retrying`);
   }
@@ -65,7 +65,7 @@ export function tooltipLines(
   if (snapshot.displayMode === "unlimited") {
     const lines = [
       `**Unlimited** — no usage cap on this plan.`,
-      `\n${snapshot.planName ?? "Plan"} · resets ${formatReset(snapshot.cycleEnd)}`,
+      `\n${planDisplayLabel(snapshot)} · resets ${formatReset(snapshot.cycleEnd)}`,
     ];
     if (snapshot.stale) {
       lines.push(`\n\nLast updated · retrying`);
@@ -106,7 +106,7 @@ export function tooltipLines(
         `<span style="opacity:0.7;">Team pool ${formatUsd(snapshot.teamPoolUsedUsd)} / ${formatUsd(snapshot.teamPoolLimitUsd)}</span>`,
       );
     }
-    lines.push(`\n${snapshot.planName ?? "Plan"} · resets ${formatReset(snapshot.cycleEnd)}`);
+    lines.push(`\n${planDisplayLabel(snapshot)} · resets ${formatReset(snapshot.cycleEnd)}`);
     if (snapshot.stale) {
       lines.push(`\n\nLast updated · retrying`);
     }

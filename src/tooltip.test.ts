@@ -90,4 +90,14 @@ describe("tooltipLines", () => {
     expect(text).toContain("Cursor");
     expect(text).toContain("Other");
   });
+
+  it("title-cases membershipType when planName is missing", () => {
+    const text = tooltipLines(
+      { ...base, planName: null, membershipType: "enterprise" },
+      60,
+      85,
+    ).join("\n");
+    expect(text).toContain("Enterprise · resets");
+    expect(text).not.toContain("Plan · resets");
+  });
 });

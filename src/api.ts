@@ -1,4 +1,5 @@
 import { buildWorkosCookie, userIdFromJwt } from "./auth";
+import { mapUsage, needsUsageSummaryFallback, type UsageSnapshot } from "./usage";
 
 const API_ORIGIN = "https://api2.cursor.sh";
 const WEB_ORIGIN = "https://cursor.com";
@@ -95,6 +96,28 @@ export function usageSummaryRequestInit(token: string, useCookie: boolean): Requ
       Accept: "application/json",
     },
   };
+}
+
+export async function tryUsageSummary(
+  token: string,
+  snapshot: UsageSnapshot,
+  fetchedAt: number,
+  period: unknown,
+  hardLimit: unknown,
+  planInfo: unknown,
+): Promise<{ snapshot: UsageSnapshot; failed: boolean }> {
+  if (!needsUsageSummaryFallback(snapshot)) {
+    return { snapshot, failed: false };
+  }
+  try {
+    const summary = await fetchUsageSummary(token);
+    return {
+      snapshot: mapUsage(period, hardLimit, planInfo, fetchedAt, false, summary),
+      failed: false,
+    };
+  } catch {
+    return { snapshot, failed: true };
+  }
 }
 
 export async function fetchUsageSummary(token: string): Promise<unknown> {

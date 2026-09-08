@@ -14,6 +14,20 @@ export function formatUsd(value: number | null): string {
   return `$${value.toFixed(2)}`;
 }
 
+export function planDisplayLabel(
+  snapshot: Pick<UsageSnapshot, "planName" | "membershipType">,
+  fallback = "Plan",
+): string {
+  if (snapshot.planName) {
+    return snapshot.planName;
+  }
+  if (snapshot.membershipType) {
+    const type = snapshot.membershipType;
+    return type.charAt(0).toUpperCase() + type.slice(1);
+  }
+  return fallback;
+}
+
 export type StatusKind = "ok" | "loading" | "sign-in" | "auth";
 
 export function formatStatusBar(

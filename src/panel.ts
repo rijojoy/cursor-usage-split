@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { BAND_HEX, colorBand } from "./colors";
-import { formatPercent, formatUsd } from "./format";
+import { formatPercent, formatUsd, planDisplayLabel } from "./format";
 import type { UsageSnapshot } from "./usage";
 
 export const DASHBOARD_URL = "https://cursor.com/dashboard/usage";
@@ -237,7 +237,7 @@ export function renderPanelHtml(
   <main>
     <header>
       <h1>Usage</h1>
-      <p class="plan">${snapshot.planName ?? "Current plan"}</p>
+      <p class="plan">${planDisplayLabel(snapshot, "Current plan")}</p>
       <p class="meta">Resets ${formatReset(snapshot.cycleEnd)}${snapshot.stale ? " · retrying" : ""}</p>
     </header>
     ${cards}

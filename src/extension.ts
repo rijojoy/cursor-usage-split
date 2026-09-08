@@ -4,9 +4,9 @@ import * as vscode from "vscode";
 import {
   AuthError,
   fetchUsagePayloads,
-  fetchUsageSummary,
   NetworkError,
   RateLimitError,
+  tryUsageSummary,
 } from "./api";
 import { getAccessToken, getStateDbPath } from "./auth";
 import { BAND_HEX, statusBarBand } from "./colors";
@@ -92,41 +92,40 @@ async function tick(force = false): Promise<void> {
     }
 
     const payloads = await fetchUsagePayloads(token);
+    const fetchedAt = Date.now();
     let snapshot = mapUsage(
       payloads.period,
       payloads.hardLimit,
       payloads.planInfo,
-      Date.now(),
+      fetchedAt,
       false,
     );
-    if (needsUsageSummaryFallback(snapshot)) {
-      try {
-        const summary = await fetchUsageSummary(token);
-        snapshot = mapUsage(
-          payloads.period,
-          payloads.hardLimit,
-          payloads.planInfo,
-          Date.now(),
-          false,
-          summary,
-        );
+    const needsFallback = needsUsageSummaryFallback(snapshot);
+    const summaryResult = await tryUsageSummary(
+      token,
+      snapshot,
+      fetchedAt,
+      payloads.period,
+      payloads.hardLimit,
+      payloads.planInfo,
+    );
+    snapshot = summaryResult.snapshot;
+    if (summaryResult.failed) {
+      snapshot = { ...snapshot, stale: true };
+      intervalMs = Math.min(60_000, intervalMs * 2);
+      logError("usage-summary failed");
+    } else {
+      if (needsFallback) {
         logInfo(
           `usage-summary fallback displayMode=${snapshot.displayMode} source=${snapshot.budgetSource ?? "none"}`,
         );
-      } catch (error) {
-        if (error instanceof AuthError) {
-          throw error;
-        }
-        logError(
-          error instanceof Error ? `usage-summary: ${error.message}` : "usage-summary failed",
-        );
       }
+      intervalMs = configuredInterval();
     }
     lastSnapshot = snapshot;
     applyBar("ok", snapshot);
     const t = thresholds();
     refreshOpenPanel(snapshot, t.warningPercent, t.criticalPercent);
-    intervalMs = configuredInterval();
     logInfo(
       `usage refreshed displayMode=${snapshot.displayMode} source=${snapshot.budgetSource ?? "none"}`,
     );
