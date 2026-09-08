@@ -29,15 +29,84 @@ describe("colorBand", () => {
 
 describe("statusBarBand", () => {
   it("is green when Cursor usage is low", () => {
-    expect(statusBarBand({ cursorPct: 5, otherPct: 0, onDemandPct: null })).toBe("green");
+    expect(
+      statusBarBand({
+        displayMode: "split",
+        cursorPct: 5,
+        otherPct: 0,
+        onDemandPct: null,
+        budgetPct: null,
+      }),
+    ).toBe("green");
   });
 
   it("uses the worst of the three quotas", () => {
-    expect(statusBarBand({ cursorPct: 5, otherPct: 90, onDemandPct: null })).toBe("red");
-    expect(statusBarBand({ cursorPct: 5, otherPct: 70, onDemandPct: null })).toBe("yellow");
+    expect(
+      statusBarBand({
+        displayMode: "split",
+        cursorPct: 5,
+        otherPct: 90,
+        onDemandPct: null,
+        budgetPct: null,
+      }),
+    ).toBe("red");
+    expect(
+      statusBarBand({
+        displayMode: "split",
+        cursorPct: 5,
+        otherPct: 70,
+        onDemandPct: null,
+        budgetPct: null,
+      }),
+    ).toBe("yellow");
   });
 
   it("ignores on-demand when there is no cap", () => {
-    expect(statusBarBand({ cursorPct: 5, otherPct: 5, onDemandPct: null })).toBe("green");
+    expect(
+      statusBarBand({
+        displayMode: "split",
+        cursorPct: 5,
+        otherPct: 5,
+        onDemandPct: null,
+        budgetPct: null,
+      }),
+    ).toBe("green");
+  });
+
+  it("uses budgetPct as the only band in budget mode", () => {
+    expect(
+      statusBarBand(
+        {
+          displayMode: "budget",
+          cursorPct: 99,
+          otherPct: 99,
+          onDemandPct: null,
+          budgetPct: 50,
+        },
+        60,
+        85,
+      ),
+    ).toBe("green");
+    expect(
+      statusBarBand({
+        displayMode: "budget",
+        cursorPct: null,
+        otherPct: null,
+        onDemandPct: null,
+        budgetPct: 90,
+      }),
+    ).toBe("red");
+  });
+
+  it("does not traffic-light unlimited", () => {
+    expect(
+      statusBarBand({
+        displayMode: "unlimited",
+        cursorPct: 100,
+        otherPct: 100,
+        onDemandPct: 100,
+        budgetPct: null,
+      }),
+    ).toBe("green");
   });
 });

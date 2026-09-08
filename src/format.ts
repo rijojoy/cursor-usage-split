@@ -18,7 +18,16 @@ export type StatusKind = "ok" | "loading" | "sign-in" | "auth";
 
 export function formatStatusBar(
   kind: StatusKind,
-  snapshot?: Pick<UsageSnapshot, "cursorPct" | "otherPct" | "onDemandUsd" | "stale">,
+  snapshot?: Pick<
+    UsageSnapshot,
+    | "displayMode"
+    | "cursorPct"
+    | "otherPct"
+    | "onDemandUsd"
+    | "budgetUsedUsd"
+    | "budgetLimitUsd"
+    | "stale"
+  >,
 ): string {
   if (kind === "loading") {
     return "$(dashboard) Cursor · Other · On-d …";
@@ -33,5 +42,11 @@ export function formatStatusBar(
     return "$(dashboard) Cursor · Other · On-d …";
   }
   const stale = snapshot.stale ? " ·" : "";
+  if (snapshot.displayMode === "unlimited") {
+    return `$(dashboard) Unlimited${stale}`;
+  }
+  if (snapshot.displayMode === "budget") {
+    return `$(dashboard) ${formatUsd(snapshot.budgetUsedUsd)} / ${formatUsd(snapshot.budgetLimitUsd)}${stale}`;
+  }
   return `$(dashboard) Cursor ${formatPercent(snapshot.cursorPct)} · Other ${formatPercent(snapshot.otherPct)} · On-d ${formatUsd(snapshot.onDemandUsd)}${stale}`;
 }

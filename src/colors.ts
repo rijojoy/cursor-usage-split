@@ -1,3 +1,5 @@
+import type { DisplayMode } from "./usage";
+
 export type Band = "green" | "yellow" | "red";
 
 export const BAND_HEX: Record<Band, string> = {
@@ -27,10 +29,24 @@ export function colorBand(
 const RANK: Record<Band, number> = { green: 0, yellow: 1, red: 2 };
 
 export function statusBarBand(
-  snap: { cursorPct: number | null; otherPct: number | null; onDemandPct: number | null },
+  snap: {
+    displayMode?: DisplayMode;
+    cursorPct: number | null;
+    otherPct: number | null;
+    onDemandPct: number | null;
+    budgetPct?: number | null;
+  },
   warningPercent = 60,
   criticalPercent = 85,
 ): Band {
+  if (snap.displayMode === "unlimited") {
+    return "green";
+  }
+  if (snap.displayMode === "budget") {
+    return colorBand(snap.budgetPct ?? null, warningPercent, criticalPercent, {
+      noCap: snap.budgetPct == null,
+    });
+  }
   const bands: Band[] = [
     colorBand(snap.cursorPct, warningPercent, criticalPercent),
     colorBand(snap.otherPct, warningPercent, criticalPercent),
