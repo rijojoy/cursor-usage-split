@@ -1,4 +1,7 @@
+import { buildWorkosCookie, userIdFromJwt } from "./auth";
+
 const API_ORIGIN = "https://api2.cursor.sh";
+const WEB_ORIGIN = "https://cursor.com";
 
 export class AuthError extends Error {
   constructor(message = "Cursor API returned 401/403") {
@@ -68,4 +71,62 @@ export async function fetchUsagePayloads(token: string): Promise<UsagePayloads> 
     postDashboard("/aiserver.v1.DashboardService/GetPlanInfo", token),
   ]);
   return { period, hardLimit, planInfo };
+}
+
+export function usageSummaryRequestInit(token: string, useCookie: boolean): RequestInit {
+  if (!useCookie) {
+    return {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+    };
+  }
+  const userId = userIdFromJwt(token);
+  if (!userId) {
+    throw new AuthError("Cannot build Cursor session cookie");
+  }
+  return {
+    method: "GET",
+    headers: {
+      Cookie: buildWorkosCookie(userId, token),
+      Origin: WEB_ORIGIN,
+      Accept: "application/json",
+    },
+  };
+}
+
+export async function fetchUsageSummary(token: string): Promise<unknown> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    for (const useCookie of [false, true]) {
+      const response = await fetch(`${WEB_ORIGIN}/api/usage-summary`, {
+        ...usageSummaryRequestInit(token, useCookie),
+        signal: controller.signal,
+      });
+      if (response.status === 401 || response.status === 403) {
+        if (!useCookie) {
+          continue;
+        }
+        throw new AuthError();
+      }
+      if (response.status === 429) {
+        throw new RateLimitError();
+      }
+      if (!response.ok) {
+        throw new NetworkError(`HTTP ${response.status}`);
+      }
+      return (await response.json()) as unknown;
+    }
+    throw new AuthError();
+  } catch (error) {
+    if (error instanceof AuthError || error instanceof RateLimitError || error instanceof NetworkError) {
+      throw error;
+    }
+    throw new NetworkError(error instanceof Error ? error.message : "network error");
+  } finally {
+    clearTimeout(timer);
+  }
 }
