@@ -1,15 +1,38 @@
+export type DisplayMode = "split" | "budget" | "unlimited";
+export type BudgetLabel = "Usage" | "Your limit" | "Team pool";
+export type BudgetSource = "overall" | "plan" | "individual" | "pooled";
+
 export type UsageSnapshot = {
+  displayMode: DisplayMode;
   cursorPct: number | null;
   otherPct: number | null;
   onDemandUsd: number | null;
   onDemandPct: number | null;
   onDemandEnabled: boolean;
+  budgetUsedUsd: number | null;
+  budgetLimitUsd: number | null;
+  budgetPct: number | null;
+  budgetLabel: BudgetLabel | null;
+  budgetSource: BudgetSource | null;
+  teamPoolUsedUsd: number | null;
+  teamPoolLimitUsd: number | null;
   planName: string | null;
+  membershipType: string | null;
   includedUsd: number | null;
   cycleStart: string | null;
   cycleEnd: string | null;
   fetchedAt: number;
   stale: boolean;
+};
+
+export type ClassifyInput = {
+  isUnlimited: boolean;
+  overallLimitCents: number | null;
+  autoPercentUsed: number | null;
+  apiPercentUsed: number | null;
+  planLimitCents: number | null;
+  individualLimitCents: number | null;
+  pooledLimitCents: number | null;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -77,6 +100,74 @@ function pickPlanInfo(planInfo: unknown): Record<string, unknown> | null {
   return asRecord(root.planInfo) ?? root;
 }
 
+export function centsPairToUsd(
+  usedCents: number | null,
+  limitCents: number | null,
+): { usedUsd: number | null; limitUsd: number | null; pct: number | null } {
+  const usedUsd = usedCents === null ? null : usedCents / 100;
+  const limitUsd =
+    limitCents !== null && limitCents > 0 ? limitCents / 100 : null;
+  const pct =
+    usedUsd !== null && limitUsd !== null && limitUsd > 0
+      ? (usedUsd / limitUsd) * 100
+      : null;
+  return { usedUsd, limitUsd, pct };
+}
+
+export function classifyDisplayMode(
+  input: ClassifyInput,
+): { mode: DisplayMode; budgetSource: BudgetSource | null } {
+  if (input.isUnlimited) {
+    return { mode: "unlimited", budgetSource: null };
+  }
+  if (input.overallLimitCents !== null && input.overallLimitCents > 0) {
+    return { mode: "budget", budgetSource: "overall" };
+  }
+  if (input.autoPercentUsed !== null || input.apiPercentUsed !== null) {
+    return { mode: "split", budgetSource: null };
+  }
+  if (input.planLimitCents !== null && input.planLimitCents > 0) {
+    return { mode: "budget", budgetSource: "plan" };
+  }
+  if (input.individualLimitCents !== null && input.individualLimitCents > 0) {
+    return { mode: "budget", budgetSource: "individual" };
+  }
+  if (input.pooledLimitCents !== null && input.pooledLimitCents > 0) {
+    return { mode: "budget", budgetSource: "pooled" };
+  }
+  return { mode: "split", budgetSource: null };
+}
+
+export function needsUsageSummaryFallback(
+  snap: Pick<
+    UsageSnapshot,
+    "displayMode" | "cursorPct" | "otherPct" | "budgetUsedUsd" | "budgetLimitUsd"
+  >,
+): boolean {
+  if (snap.displayMode === "unlimited" || snap.displayMode === "budget") {
+    return false;
+  }
+  return (
+    snap.cursorPct === null &&
+    snap.otherPct === null &&
+    snap.budgetUsedUsd === null &&
+    snap.budgetLimitUsd === null
+  );
+}
+
+function budgetLabelFor(source: BudgetSource | null): BudgetLabel | null {
+  if (source === "overall" || source === "individual") {
+    return "Your limit";
+  }
+  if (source === "pooled") {
+    return "Team pool";
+  }
+  if (source === "plan") {
+    return "Usage";
+  }
+  return null;
+}
+
 export function mapUsage(
   period: unknown,
   hardLimit: unknown,
@@ -131,11 +222,20 @@ export function mapUsage(
     toNumber(plan?.includedSpend) ?? toNumber(info?.includedAmountCents);
 
   return {
+    displayMode: "split",
     cursorPct: toNumber(plan?.autoPercentUsed),
     otherPct: toNumber(plan?.apiPercentUsed),
     onDemandUsd,
     onDemandPct,
     onDemandEnabled,
+    membershipType: null,
+    budgetUsedUsd: null,
+    budgetLimitUsd: null,
+    budgetPct: null,
+    budgetLabel: null,
+    budgetSource: null,
+    teamPoolUsedUsd: null,
+    teamPoolLimitUsd: null,
     planName:
       (typeof info?.planName === "string" && info.planName) ||
       (typeof info?.name === "string" && info.name) ||
