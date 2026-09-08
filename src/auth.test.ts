@@ -160,6 +160,31 @@ describe("readAccessTokenFromBytes", () => {
   });
 });
 
+describe("readAuthBundleFromFile", () => {
+  it("reads a token with native sqlite instead of loading the whole db", async () => {
+    const fs = await import("fs");
+    const os = await import("os");
+    const path = await import("path");
+    const { readAuthBundleFromFile } = await import("./auth");
+    const initSqlJs = (await import("sql.js")).default;
+    const SQL = await initSqlJs();
+    const db = new SQL.Database();
+    db.run("CREATE TABLE ItemTable (key TEXT, value TEXT)");
+    db.run("INSERT INTO ItemTable VALUES (?, ?)", ["cursorAuth/accessToken", "native.tok.en"]);
+    const bytes = db.export();
+    db.close();
+    const file = path.join(os.tmpdir(), `cursor-usage-split-${Date.now()}.vscdb`);
+    fs.writeFileSync(file, bytes);
+    try {
+      const bundle = readAuthBundleFromFile(file);
+      expect(bundle.token).toBe("native.tok.en");
+      expect(bundle.method === "sqlite3" || bundle.method === "python").toBe(true);
+    } finally {
+      fs.unlinkSync(file);
+    }
+  });
+});
+
 describe("buildWorkosCookie", () => {
   it("url-encodes userId::token", () => {
     expect(buildWorkosCookie("user_abc", "tok.en")).toBe(

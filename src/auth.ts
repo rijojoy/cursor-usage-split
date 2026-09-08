@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import initSqlJs from "sql.js";
+import { querySqlite, querySqliteValue, SQLJS_MAX_BYTES, sqlStringLiteral } from "./sqliteQuery";
 
 const ACCESS_TOKEN_KEYS = ["cursorAuth/accessToken", "cursorAuth/token"] as const;
 const USER_ID_KEYS = ["cursorAuth/cachedUserId", "cursorAuth/userId"] as const;
@@ -244,11 +245,51 @@ export async function readAccessTokenFromBytes(
   return bundle.token;
 }
 
+export function readAuthBundleFromFile(dbPath: string): AuthBundle & { method: string; error?: string; sizeBytes: number } {
+  const sizeBytes = fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0;
+  let method: string = "none";
+  let error: string | undefined;
+  let token: string | null = null;
+  let cachedUserId: string | null = null;
+  for (const key of ACCESS_TOKEN_KEYS) {
+    const queried = querySqliteValue(dbPath, `SELECT value FROM ItemTable WHERE key = ${sqlStringLiteral(key)} LIMIT 1`);
+    method = queried.method ?? method;
+    error = queried.error;
+    if (queried.value) {
+      token = parseStoredAccessToken(queried.value);
+      if (token) {
+        break;
+      }
+    }
+  }
+  if (method !== "none") {
+    for (const key of USER_ID_KEYS) {
+      const queried = querySqliteValue(dbPath, `SELECT value FROM ItemTable WHERE key = ${sqlStringLiteral(key)} LIMIT 1`);
+      if (queried.value) {
+        cachedUserId = parseStoredAccessToken(queried.value);
+        if (cachedUserId) {
+          break;
+        }
+      }
+    }
+    const keysQuery = querySqlite(dbPath, "SELECT key FROM ItemTable WHERE key LIKE 'cursorAuth/%'");
+    const keys = keysQuery.stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    return { token, cachedUserId, keys, method, sizeBytes };
+  }
+  return { token: null, cachedUserId: null, keys: [], method: "none", error, sizeBytes };
+}
+
 export type AuthProbe = {
   path: string;
   exists: boolean;
   token: boolean;
-  kind: "sqlite" | "auth.json";
+  kind: "sqlite" | "auth.json" | "secret";
+  method?: string;
+  error?: string;
+  sizeBytes?: number;
 };
 
 export type CursorSession = {
@@ -281,7 +322,11 @@ function sessionFromToken(token: string, source: string, extraUserId?: string | 
   };
 }
 
-export async function probeAuth(wasmPath?: string, extraDbPath?: string): Promise<{
+export async function probeAuth(
+  wasmPath?: string,
+  extraDbPath?: string,
+  secretToken?: string,
+): Promise<{
   session: CursorSession | null;
   probes: AuthProbe[];
   sqliteKeys: string[];
@@ -290,28 +335,50 @@ export async function probeAuth(wasmPath?: string, extraDbPath?: string): Promis
   let session: CursorSession | null = null;
   let sqliteKeys: string[] = [];
 
+  if (secretToken) {
+    session = sessionFromToken(secretToken, "secretStorage");
+    probes.push({ path: "secretStorage", exists: true, token: true, kind: "secret" });
+  }
+
   const dbCandidates = uniqueDbPaths([extraDbPath, ...getStateDbCandidates()]);
   for (const dbPath of dbCandidates) {
     const exists = fs.existsSync(dbPath);
     let found = false;
+    let method: string | undefined;
+    let error: string | undefined;
+    let sizeBytes: number | undefined;
     if (exists) {
-      try {
-        const bytes = new Uint8Array(fs.readFileSync(dbPath));
-        const bundle = await readAuthBundleFromBytes(bytes, wasmPath);
-        if (bundle.keys.length && sqliteKeys.length === 0) {
-          sqliteKeys = bundle.keys;
+      const native = readAuthBundleFromFile(dbPath);
+      sizeBytes = native.sizeBytes;
+      method = native.method;
+      error = native.error;
+      let bundle = native;
+      if (!native.token && native.sizeBytes <= SQLJS_MAX_BYTES) {
+        try {
+          const bytes = new Uint8Array(fs.readFileSync(dbPath));
+          const wasmBundle = await readAuthBundleFromBytes(bytes, wasmPath);
+          bundle = { ...wasmBundle, method: "sql.js", sizeBytes: native.sizeBytes };
+          method = "sql.js";
+          error = undefined;
+        } catch (err) {
+          error = err instanceof Error ? err.message : "sql.js failed";
         }
-        if (bundle.token) {
-          found = true;
-          if (!session) {
-            session = sessionFromToken(bundle.token, dbPath, bundle.cachedUserId);
-          }
+      } else if (!native.token && native.sizeBytes > SQLJS_MAX_BYTES) {
+        error = native.error
+          ? `${native.error}; db is ${Math.round(native.sizeBytes / 1024 / 1024)}MB (sql.js skipped)`
+          : `db is ${Math.round(native.sizeBytes / 1024 / 1024)}MB; need sqlite3 or python`;
+      }
+      if (bundle.keys.length && sqliteKeys.length === 0) {
+        sqliteKeys = bundle.keys;
+      }
+      if (bundle.token) {
+        found = true;
+        if (!session) {
+          session = sessionFromToken(bundle.token, dbPath, bundle.cachedUserId);
         }
-      } catch {
-        // Locked, unreadable, or not sqlite — try the next candidate.
       }
     }
-    probes.push({ path: dbPath, exists, token: found, kind: "sqlite" });
+    probes.push({ path: dbPath, exists, token: found, kind: "sqlite", method, error, sizeBytes });
   }
 
   for (const jsonPath of uniqueDbPaths(authJsonCandidates())) {
@@ -336,12 +403,20 @@ export async function probeAuth(wasmPath?: string, extraDbPath?: string): Promis
   return { session, probes, sqliteKeys };
 }
 
-export async function getSession(wasmPath?: string, extraDbPath?: string): Promise<CursorSession | null> {
-  const { session } = await probeAuth(wasmPath, extraDbPath);
+export async function getSession(
+  wasmPath?: string,
+  extraDbPath?: string,
+  secretToken?: string,
+): Promise<CursorSession | null> {
+  const { session } = await probeAuth(wasmPath, extraDbPath, secretToken);
   return session;
 }
 
-export async function getAccessToken(wasmPath?: string, extraDbPath?: string): Promise<string | null> {
-  const session = await getSession(wasmPath, extraDbPath);
+export async function getAccessToken(
+  wasmPath?: string,
+  extraDbPath?: string,
+  secretToken?: string,
+): Promise<string | null> {
+  const session = await getSession(wasmPath, extraDbPath, secretToken);
   return session?.token ?? null;
 }

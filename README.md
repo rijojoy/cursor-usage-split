@@ -52,6 +52,7 @@ Click it (or **Cursor Usage Split: Open details**) for the panel:
 | Cursor Usage Split: Open details | Usage panel |
 | Cursor Usage Split: Open dashboard | cursor.com/dashboard/usage |
 | Cursor Usage Split: Diagnose auth | If the bar says Sign in / Auth. A browser login on cursor.com is not enough — sign in via Cursor Settings → Account, then reload. |
+| Cursor Usage Split: Set access token | Last resort if Diagnose cannot read Cursor’s database |
 
 ## Settings
 
@@ -64,7 +65,7 @@ Click it (or **Cursor Usage Split: Open details**) for the panel:
 
 ## How it works
 
-Reads `cursorAuth/accessToken` from Cursor’s local `state.vscdb` (sql.js), or from `cursor-agent`’s `auth.json`. Polls `GetCurrentPeriodUsage` on `api2.cursor.sh` first. Personal Pro/Ultra usually stop there. Enterprise / Teams dollar caps often 401 or return an empty RPC body; then the same login hits `cursor.com/api/usage-summary` (WorkOS cookie). Nothing is uploaded to a third-party server. No cookie paste.
+Reads `cursorAuth/accessToken` from Cursor’s local `state.vscdb` using native sqlite (sql.js only for small DBs), or from `cursor-agent`’s `auth.json`. Polls `GetCurrentPeriodUsage` on `api2.cursor.sh` first. Personal Pro/Ultra usually stop there. Enterprise / Teams dollar caps often 401 or return an empty RPC body; then the same login hits `cursor.com/api/usage-summary` (WorkOS cookie). Nothing is uploaded to a third-party server.
 
 ## License
 

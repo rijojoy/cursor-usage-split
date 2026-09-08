@@ -2,7 +2,7 @@
   "name": "cursor-usage-split",
   "displayName": "Cursor Usage Split",
   "description": "Auto vs API usage, or enterprise dollar caps, in the Cursor status bar.",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "publisher": "rijojoy",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -54,6 +54,14 @@
       {
         "command": "cursorUsageSplit.diagnoseAuth",
         "title": "Cursor Usage Split: Diagnose auth"
+      },
+      {
+        "command": "cursorUsageSplit.setAccessToken",
+        "title": "Cursor Usage Split: Set access token"
+      },
+      {
+        "command": "cursorUsageSplit.clearAccessToken",
+        "title": "Cursor Usage Split: Clear saved access token"
       }
     ],
     "configuration": {

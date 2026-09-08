@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3
+
+- Read `cursorAuth/accessToken` with native sqlite3/python (WAL-safe). sql.js was loading the whole Cursor DB — often 1GB+ — and failing, which showed Sign in even when the token existed
+- Optional **Set access token** command if the machine has neither sqlite3 nor Python
+
 ## 0.2.2
 
 - Enterprise: if the dashboard RPC returns 401, still load `cursor.com/api/usage-summary` (the endpoint that actually has dollar caps)

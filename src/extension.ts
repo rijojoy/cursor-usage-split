@@ -22,6 +22,7 @@ let lastSnapshot: UsageSnapshot | undefined;
 let intervalMs = 10_000;
 let wasmPath: string | undefined;
 let extraDbPath: string | undefined;
+let secretToken: string | undefined;
 
 function cfg() {
   return vscode.workspace.getConfiguration("cursorUsageSplit");
@@ -59,7 +60,7 @@ function applyBar(kind: "ok" | "loading" | "sign-in" | "auth", snapshot?: UsageS
   } else if (kind === "sign-in") {
     statusBar.color = undefined;
     statusBar.tooltip =
-      "Sign in via Cursor Settings → Account (a browser login on cursor.com is not enough), then reload the window.";
+      "Sign in via Cursor Settings → Account, then reload. If it still says Sign in, run Cursor Usage Split: Diagnose auth (large Cursor DBs need sqlite3/python).";
   } else if (kind === "auth") {
     statusBar.color = undefined;
     statusBar.tooltip = "Token stale — sign in to Cursor again, then reload the window.";
@@ -85,7 +86,7 @@ async function tick(force = false): Promise<void> {
   }
   inFlight = true;
   try {
-    const session = await getSession(wasmPath, extraDbPath);
+    const session = await getSession(wasmPath, extraDbPath, secretToken);
     if (!session) {
       applyBar("sign-in");
       intervalMs = configuredInterval();
@@ -151,7 +152,19 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(statusBar);
   applyBar("loading");
 
+  const loadSecret = async () => {
+    secretToken = (await context.secrets.get("accessToken")) || undefined;
+  };
+  void loadSecret().then(() => {
+    void tick(true);
+  });
+
   context.subscriptions.push(
+    context.secrets.onDidChange((event) => {
+      if (event.key === "accessToken") {
+        void loadSecret().then(() => tick(true));
+      }
+    }),
     vscode.commands.registerCommand("cursorUsageSplit.refresh", () => {
       void tick(true);
     }),
@@ -169,26 +182,50 @@ export function activate(context: vscode.ExtensionContext): void {
       void vscode.env.openExternal(vscode.Uri.parse(DASHBOARD_URL));
     }),
     vscode.commands.registerCommand("cursorUsageSplit.diagnoseAuth", async () => {
-      const { session, probes, sqliteKeys } = await probeAuth(wasmPath, extraDbPath);
+      const { session, probes, sqliteKeys } = await probeAuth(wasmPath, extraDbPath, secretToken);
       logInfo(`diagnose session=${session ? "yes" : "no"} source=${session?.source ?? ""} cookieIds=${session?.userIds.length ?? 0}`);
       if (sqliteKeys.length) {
         logInfo(`diagnose sqliteKeys=${sqliteKeys.join(",")}`);
       }
       for (const probe of probes) {
+        const mb = probe.sizeBytes != null ? `${Math.round(probe.sizeBytes / 1024 / 1024)}MB` : "";
         logInfo(
-          `diagnose kind=${probe.kind} path=${probe.path} exists=${probe.exists ? "yes" : "no"} token=${probe.token ? "yes" : "no"}`,
+          `diagnose kind=${probe.kind} method=${probe.method ?? ""} size=${mb} exists=${probe.exists ? "yes" : "no"} token=${probe.token ? "yes" : "no"} path=${probe.path}${probe.error ? ` error=${probe.error}` : ""}`,
         );
       }
       if (session) {
         void vscode.window.showInformationMessage(
-          `Access token found (${session.userIds.length} session id candidate${session.userIds.length === 1 ? "" : "s"}). If the bar still says Auth, reload the window.`,
+          `Access token found via ${session.source === "secretStorage" ? "saved token" : session.source}. If the bar still says Auth, reload the window.`,
         );
         return;
       }
       getLog().show(true);
       void vscode.window.showInformationMessage(
-        "No Cursor app token. Sign in via Cursor Settings → Account (not the browser), then Developer: Reload Window. See Cursor Usage Split output for paths checked.",
+        "No Cursor app token. Sign in via Cursor Settings → Account, or run Cursor Usage Split: Set access token. Details are in the Cursor Usage Split output.",
       );
+    }),
+    vscode.commands.registerCommand("cursorUsageSplit.setAccessToken", async () => {
+      const value = await vscode.window.showInputBox({
+        title: "Cursor Usage Split: Set access token",
+        prompt: "Paste the JWT from cursorAuth/accessToken if Diagnose cannot read the Cursor database.",
+        password: true,
+        ignoreFocusOut: true,
+      });
+      if (!value) {
+        return;
+      }
+      if (value.split(".").length < 3) {
+        void vscode.window.showErrorMessage("That does not look like a Cursor JWT.");
+        return;
+      }
+      await context.secrets.store("accessToken", value.trim());
+      void vscode.window.showInformationMessage("Access token saved in this machine’s secret storage.");
+    }),
+    vscode.commands.registerCommand("cursorUsageSplit.clearAccessToken", async () => {
+      await context.secrets.delete("accessToken");
+      secretToken = undefined;
+      void vscode.window.showInformationMessage("Saved access token cleared.");
+      void tick(true);
     }),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("cursorUsageSplit")) {
@@ -200,7 +237,6 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
-  void tick(true);
 }
 
 export function deactivate(): void {
