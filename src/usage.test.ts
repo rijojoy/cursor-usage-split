@@ -28,6 +28,8 @@ describe("mapUsage", () => {
       fetchedAt,
     );
 
+    expect(snap.displayMode).toBe("split");
+    expect(snap.budgetUsedUsd).toBeNull();
     expect(snap.cursorPct).toBe(42.2);
     expect(snap.otherPct).toBe(18.4);
     expect(snap.planName).toBe("Pro");
@@ -99,6 +101,142 @@ describe("mapUsage", () => {
     expect(snap.onDemandEnabled).toBe(false);
     expect(snap.onDemandUsd).toBe(0);
     expect(snap.onDemandPct).toBeNull();
+  });
+
+  it("maps enterprise overall cents to a $200 / $400 budget", () => {
+    const snap = mapUsage(
+      {
+        billingCycleStart: "2026-09-01T00:00:00.000Z",
+        billingCycleEnd: "2026-10-01T00:00:00.000Z",
+        membershipType: "enterprise",
+        individualUsage: {
+          overall: { enabled: true, used: 20000, limit: 40000, remaining: 20000 },
+        },
+        teamUsage: {
+          onDemand: { enabled: true, used: 0, limit: null, remaining: null },
+          pooled: { enabled: true, used: 1_272_5135, limit: 2_812_2000, remaining: 1_539_6865 },
+        },
+      },
+      { noUsageBasedAllowed: false },
+      { planInfo: { planName: "Enterprise" } },
+      fetchedAt,
+    );
+
+    expect(snap.displayMode).toBe("budget");
+    expect(snap.budgetSource).toBe("overall");
+    expect(snap.budgetLabel).toBe("Your limit");
+    expect(snap.budgetUsedUsd).toBe(200);
+    expect(snap.budgetLimitUsd).toBe(400);
+    expect(snap.budgetPct).toBe(50);
+    expect(snap.teamPoolUsedUsd).toBeCloseTo(127251.35);
+    expect(snap.teamPoolLimitUsd).toBe(281220);
+    expect(snap.cursorPct).toBeNull();
+    expect(snap.otherPct).toBeNull();
+    expect(snap.planName).toBe("Enterprise");
+    expect(snap.membershipType).toBe("enterprise");
+  });
+
+  it("does not switch Ultra to budget just because planUsage.limit exists", () => {
+    const snap = mapUsage(
+      {
+        planUsage: {
+          autoPercentUsed: 98.1,
+          apiPercentUsed: 100,
+          totalPercentUsed: 98.5,
+          includedSpend: 40000,
+          totalSpend: 40000,
+          limit: 40000,
+        },
+      },
+      {},
+      { planInfo: { planName: "Ultra" } },
+      fetchedAt,
+    );
+    expect(snap.displayMode).toBe("split");
+    expect(snap.cursorPct).toBe(98.1);
+    expect(snap.otherPct).toBe(100);
+    expect(snap.budgetUsedUsd).toBeNull();
+  });
+
+  it("fills gaps from usage-summary when Connect period is empty", () => {
+    const summary = {
+      membershipType: "enterprise",
+      billingCycleStart: "2026-09-01T00:00:00.000Z",
+      billingCycleEnd: "2026-10-01T00:00:00.000Z",
+      individualUsage: {
+        overall: { enabled: true, used: 20000, limit: 40000, remaining: 20000 },
+      },
+    };
+    const snap = mapUsage({}, {}, {}, fetchedAt, false, summary);
+    expect(snap.displayMode).toBe("budget");
+    expect(snap.budgetUsedUsd).toBe(200);
+    expect(snap.budgetLimitUsd).toBe(400);
+    expect(snap.cycleEnd).toBe("2026-10-01T00:00:00.000Z");
+  });
+
+  it("lets Connect overall win over summary pooled-only data", () => {
+    const snap = mapUsage(
+      {
+        individualUsage: {
+          overall: { enabled: true, used: 5000, limit: 10000, remaining: 5000 },
+        },
+      },
+      {},
+      {},
+      fetchedAt,
+      false,
+      {
+        teamUsage: {
+          pooled: { enabled: true, used: 100, limit: 999999, remaining: 999899 },
+        },
+      },
+    );
+    expect(snap.budgetSource).toBe("overall");
+    expect(snap.budgetUsedUsd).toBe(50);
+    expect(snap.budgetLimitUsd).toBe(100);
+  });
+
+  it("maps pooled-only enterprise to a team-pool budget", () => {
+    const snap = mapUsage(
+      {
+        teamUsage: {
+          pooled: { enabled: true, used: 10000, limit: 40000, remaining: 30000 },
+        },
+      },
+      {},
+      {},
+      fetchedAt,
+    );
+    expect(snap.displayMode).toBe("budget");
+    expect(snap.budgetSource).toBe("pooled");
+    expect(snap.budgetLabel).toBe("Team pool");
+    expect(snap.budgetUsedUsd).toBe(100);
+    expect(snap.budgetLimitUsd).toBe(400);
+  });
+
+  it("maps unlimited enterprise without faking a cap", () => {
+    const snap = mapUsage({ isUnlimited: true }, {}, {}, fetchedAt, false, {
+      isUnlimited: true,
+      membershipType: "enterprise",
+    });
+    expect(snap.displayMode).toBe("unlimited");
+    expect(snap.budgetUsedUsd).toBeNull();
+    expect(snap.budgetLimitUsd).toBeNull();
+    expect(snap.membershipType).toBe("enterprise");
+  });
+
+  it("maps plan-limit budget when percents are absent", () => {
+    const snap = mapUsage(
+      { planUsage: { totalSpend: 20000, includedSpend: 20000, limit: 40000 } },
+      {},
+      {},
+      fetchedAt,
+    );
+    expect(snap.displayMode).toBe("budget");
+    expect(snap.budgetSource).toBe("plan");
+    expect(snap.budgetUsedUsd).toBe(200);
+    expect(snap.budgetLimitUsd).toBe(400);
+    expect(snap.includedUsd).toBe(200);
   });
 });
 

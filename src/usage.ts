@@ -92,6 +92,30 @@ function pickSpendLimit(period: Record<string, unknown> | null): Record<string, 
   );
 }
 
+function pickOverall(
+  period: Record<string, unknown> | null,
+  summary: Record<string, unknown> | null,
+) {
+  return (
+    asRecord(asRecord(period?.individualUsage)?.overall) ??
+    asRecord(asRecord(summary?.individualUsage)?.overall)
+  );
+}
+
+function pickPooled(
+  period: Record<string, unknown> | null,
+  summary: Record<string, unknown> | null,
+  spend: Record<string, unknown> | null,
+) {
+  return (
+    asRecord(asRecord(period?.teamUsage)?.pooled) ??
+    asRecord(asRecord(summary?.teamUsage)?.pooled) ??
+    (spend && (toNumber(spend.pooledLimit) !== null || toNumber(spend.pooledUsed) !== null)
+      ? { used: spend.pooledUsed, limit: spend.pooledLimit }
+      : null)
+  );
+}
+
 function pickPlanInfo(planInfo: unknown): Record<string, unknown> | null {
   const root = asRecord(planInfo);
   if (!root) {
@@ -174,12 +198,83 @@ export function mapUsage(
   planInfo: unknown,
   fetchedAt: number,
   stale = false,
+  summary: unknown = null,
 ): UsageSnapshot {
   const periodRec = asRecord(period);
+  const summaryRec = asRecord(summary);
   const plan = pickPlan(periodRec);
   const spend = pickSpendLimit(periodRec);
   const hard = asRecord(hardLimit);
   const info = pickPlanInfo(planInfo);
+
+  const overall = pickOverall(periodRec, summaryRec);
+  const pooled = pickPooled(periodRec, summaryRec, spend);
+
+  const autoPercentUsed =
+    toNumber(plan?.autoPercentUsed) ??
+    toNumber(asRecord(asRecord(summaryRec?.individualUsage)?.plan)?.autoPercentUsed);
+  const apiPercentUsed =
+    toNumber(plan?.apiPercentUsed) ??
+    toNumber(asRecord(asRecord(summaryRec?.individualUsage)?.plan)?.apiPercentUsed);
+
+  const overallUsed = toNumber(overall?.used);
+  const overallLimit = toNumber(overall?.limit);
+  const pooledUsed = toNumber(pooled?.used);
+  const pooledLimit = toNumber(pooled?.limit);
+  const planLimit = toNumber(plan?.limit);
+  const planSpend = toNumber(plan?.totalSpend) ?? toNumber(plan?.includedSpend);
+  const individualLimit =
+    toNumber(spend?.individualLimit) ??
+    toNumber(asRecord(asRecord(periodRec?.individualUsage)?.onDemand)?.limit) ??
+    toNumber(asRecord(asRecord(summaryRec?.individualUsage)?.onDemand)?.limit);
+  const individualUsed =
+    toNumber(spend?.individualUsed) ??
+    toNumber(asRecord(asRecord(periodRec?.individualUsage)?.onDemand)?.used) ??
+    toNumber(asRecord(asRecord(summaryRec?.individualUsage)?.onDemand)?.used);
+
+  const isUnlimited = periodRec?.isUnlimited === true || summaryRec?.isUnlimited === true;
+
+  const classified = classifyDisplayMode({
+    isUnlimited,
+    overallLimitCents: overallLimit,
+    autoPercentUsed,
+    apiPercentUsed,
+    planLimitCents: planLimit,
+    individualLimitCents: individualLimit,
+    pooledLimitCents: pooledLimit,
+  });
+
+  let budgetUsedUsd: number | null = null;
+  let budgetLimitUsd: number | null = null;
+  let budgetPct: number | null = null;
+  if (classified.budgetSource === "overall") {
+    ({ usedUsd: budgetUsedUsd, limitUsd: budgetLimitUsd, pct: budgetPct } = centsPairToUsd(
+      overallUsed,
+      overallLimit,
+    ));
+  } else if (classified.budgetSource === "plan") {
+    ({ usedUsd: budgetUsedUsd, limitUsd: budgetLimitUsd, pct: budgetPct } = centsPairToUsd(
+      planSpend,
+      planLimit,
+    ));
+  } else if (classified.budgetSource === "individual") {
+    ({ usedUsd: budgetUsedUsd, limitUsd: budgetLimitUsd, pct: budgetPct } = centsPairToUsd(
+      individualUsed,
+      individualLimit,
+    ));
+  } else if (classified.budgetSource === "pooled") {
+    ({ usedUsd: budgetUsedUsd, limitUsd: budgetLimitUsd, pct: budgetPct } = centsPairToUsd(
+      pooledUsed,
+      pooledLimit,
+    ));
+  }
+
+  const teamPool = centsPairToUsd(pooledUsed, pooledLimit);
+
+  const membershipType =
+    (typeof periodRec?.membershipType === "string" && periodRec.membershipType) ||
+    (typeof summaryRec?.membershipType === "string" && summaryRec.membershipType) ||
+    null;
 
   const onDemandEnabled = hard?.noUsageBasedAllowed !== true;
 
@@ -221,28 +316,39 @@ export function mapUsage(
   const includedCents =
     toNumber(plan?.includedSpend) ?? toNumber(info?.includedAmountCents);
 
+  const displayMode = classified.mode;
+  if (displayMode === "unlimited") {
+    budgetUsedUsd = null;
+    budgetLimitUsd = null;
+    budgetPct = null;
+  }
+
   return {
-    displayMode: "split",
-    cursorPct: toNumber(plan?.autoPercentUsed),
-    otherPct: toNumber(plan?.apiPercentUsed),
+    displayMode,
+    cursorPct: autoPercentUsed,
+    otherPct: apiPercentUsed,
     onDemandUsd,
     onDemandPct,
     onDemandEnabled,
-    membershipType: null,
-    budgetUsedUsd: null,
-    budgetLimitUsd: null,
-    budgetPct: null,
-    budgetLabel: null,
-    budgetSource: null,
-    teamPoolUsedUsd: null,
-    teamPoolLimitUsd: null,
+    membershipType,
+    budgetUsedUsd,
+    budgetLimitUsd,
+    budgetPct,
+    budgetLabel: budgetLabelFor(classified.budgetSource),
+    budgetSource: classified.budgetSource,
+    teamPoolUsedUsd: teamPool.usedUsd,
+    teamPoolLimitUsd: teamPool.limitUsd,
     planName:
       (typeof info?.planName === "string" && info.planName) ||
       (typeof info?.name === "string" && info.name) ||
       null,
     includedUsd: centsToUsd(includedCents),
-    cycleStart: toIso(periodRec?.billingCycleStart ?? info?.billingCycleStart),
-    cycleEnd: toIso(periodRec?.billingCycleEnd ?? info?.billingCycleEnd),
+    cycleStart: toIso(
+      periodRec?.billingCycleStart ?? summaryRec?.billingCycleStart ?? info?.billingCycleStart,
+    ),
+    cycleEnd: toIso(
+      periodRec?.billingCycleEnd ?? summaryRec?.billingCycleEnd ?? info?.billingCycleEnd,
+    ),
     fetchedAt,
     stale,
   };
